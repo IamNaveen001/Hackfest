@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Lab Timetable Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        h1 {
+            color: #007BFF;
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        label {
+            font-size: 1.2em;
+            margin: 10px 0;
+            display: block;
+        }
+        input[type="number"], input[type="text"] {
+            width: 300px;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            color: white;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            text-align: center;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dynamic Lab Timetable Generator</h1>
+    <div class="container">
+        <form id="timetableForm">
+            <label for="numSubjects">Enter Number of Subjects:</label>
+            <input type="number" id="numSubjects" min="1" placeholder="e.g., 5">
+            <button type="button" id="addSubjects">Add Subject Fields</button>
+            
+            <div id="subjectsContainer"></div>
+            
+            <label for="numLabs">Enter Number of Labs:</label>
+            <input type="number" id="numLabs" min="1" placeholder="e.g., 7">
+            <button type="button" id="addLabs">Add Lab Names</button>
+            
+            <div id="labsContainer"></div>
+            
+            <button type="submit">Generate Timetable</button>
+        </form>
+        
+        <div id="output"></div>
+        
+        <button id="downloadPdf" style="margin-top: 20px;">Download Timetable as PDF</button>
+    </div>
+
+    <script>
+        const subjectsContainer = document.getElementById("subjectsContainer");
+        const labsContainer = document.getElementById("labsContainer");
+        const timetableForm = document.getElementById("timetableForm");
+
+        document.getElementById("addSubjects").addEventListener("click", () => {
+            const numSubjects = parseInt(document.getElementById("numSubjects").value);
+            if (isNaN(numSubjects) || numSubjects < 1) {
+                alert("Please enter a valid number of subjects.");
+                return;
+            }
+
+            subjectsContainer.innerHTML = "";
+            for (let i = 1; i <= numSubjects; i++) {
+                const input = document.createElement("input");
+                input.type = "text";
+                input.name = `subject${i}`;
+                input.placeholder = `Enter Subject Code ${i}`;
+                input.required = true;
+                subjectsContainer.appendChild(input);
+            }
+        });
+
+        document.getElementById("addLabs").addEventListener("click", () => {
+            const numLabs = parseInt(document.getElementById("numLabs").value);
+            if (isNaN(numLabs) || numLabs < 1) {
+                alert("Please enter a valid number of labs.");
+                return;
+            }
+
+            labsContainer.innerHTML = "";
+            for (let i = 1; i <= numLabs; i++) {
+                const input = document.createElement("input");
+                input.type = "text";
+                input.name = `lab${i}`;
+                input.placeholder = `Enter Lab Name ${i}`;
+                input.required = true;
+                labsContainer.appendChild(input);
+            }
+        });
+
+        timetableForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const subjects = Array.from(subjectsContainer.querySelectorAll("input"))
+                .map(input => input.value.trim())
+                .filter(value => value);
+            
+            const labs = Array.from(labsContainer.querySelectorAll("input"))
+                .map(input => input.value.trim())
+                .filter(value => value);
+
+            if (subjects.length === 0 || labs.length === 0) {
+                alert("Please fill in all subject codes and lab names.");
+                return;
+            }
+
+            const response = await fetch("/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subjects, labs })
+            });
+
+            const timetable = await response.json();
+            displayTimetable(timetable);
+        });
+
+        document.getElementById("downloadPdf").addEventListener("click", async () => {
+            const subjects = Array.from(subjectsContainer.querySelectorAll("input"))
+                .map(input => input.value.trim())
+                .filter(value => value);
+
+            const labs = Array.from(labsContainer.querySelectorAll("input"))
+                .map(input => input.value.trim())
+                .filter(value => value);
+
+            if (subjects.length === 0 || labs.length === 0) {
+                alert("Please fill in all subject codes and lab names.");
+                return;
+            }
+
+            const response = await fetch("/download_pdf", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subjects, labs })
+            });
+
+            const blob = await response.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "Lab_Timetable.pdf";
+            link.click();
+        });
+
+        function displayTimetable(timetable) {
+            let outputHtml = "<table>";
+            outputHtml += "<thead><tr><th>Time Slot</th>";
+            Object.keys(timetable).forEach(day => {
+                outputHtml += `<th>${day}</th>`;
+            });
+            outputHtml += "</tr></thead><tbody>";
+
+            const timeSlots = ["09:00 - 09:50", "09:50 - 10:40", "11:00 - 11:50", "11:50 - 12:40", "01:40 - 02:30", "02:30 - 03:20"];
+            timeSlots.forEach(slot => {
+                outputHtml += `<tr><td>${slot}</td>`;
+                Object.keys(timetable).forEach(day => {
+                    outputHtml += `<td>${Object.values(timetable[day][slot]).join("<br>") || "Free"}</td>`;
+                });
+                outputHtml += "</tr>";
+            });
+
+            outputHtml += "</tbody></table>";
+            document.getElementById("output").innerHTML = outputHtml;
+        }
+    </script>
+</body>
+</html>
